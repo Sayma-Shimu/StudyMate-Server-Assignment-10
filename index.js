@@ -24,59 +24,117 @@ async function run() {
     await client.connect();
     const db = client.db("study-mate");
     const partnersCollection = db.collection("studymates");
-    const requestsCollection = db.collection("partnerRequests"); // make sure this exists in DB
+    const requestsCollection = db.collection("partnerRequests");
 
-    // Get all partners
+    // ---------------------------
+    // GET ALL PARTNERS
+    // ---------------------------
     app.get("/partners", async (req, res) => {
       const result = await partnersCollection.find().toArray();
       res.send(result);
     });
 
-    // Get single partner
+    // ---------------------------
+    // SINGLE PARTNER
+    // ---------------------------
     app.get("/partners/:id", async (req, res) => {
       const partnerId = req.params.id;
-      const partner = await partnersCollection.findOne({ _id: new ObjectId(partnerId) });
-      if (!partner) return res.status(404).send({ message: "Partner not found" });
+      const partner = await partnersCollection.findOne({
+        _id: new ObjectId(partnerId),
+      });
+
+      if (!partner)
+        return res.status(404).send({ message: "Partner not found" });
+
       res.send(partner);
     });
 
-    // Send Partner Request
+    // ---------------------------
+    // SEND REQUEST
+    // ---------------------------
     app.post("/send-request/:id", async (req, res) => {
       try {
         const partnerId = req.params.id;
         const { userEmail } = req.body;
 
-        // Find partner
-        const partner = await partnersCollection.findOne({ _id: new ObjectId(partnerId) });
-        if (!partner) return res.status(404).send({ success: false, message: "Partner not found" });
+        const partner = await partnersCollection.findOne({
+          _id: new ObjectId(partnerId),
+        });
 
-        // Increase partnerCount
-        const updatedPartner = await partnersCollection.findOneAndUpdate(
+        if (!partner)
+          return res
+            .status(404)
+            .send({ success: false, message: "Partner not found" });
+
+        await partnersCollection.updateOne(
           { _id: new ObjectId(partnerId) },
-          { $inc: { partnerCount: 1 } },
-          { returnDocument: "after" }
+          { $inc: { partnerCount: 1 } }
         );
 
-        // Save request in partnerRequests collection
         await requestsCollection.insertOne({
           partnerId: new ObjectId(partnerId),
           partnerName: partner.name,
           partnerProfileImage: partner.profileImage,
+          subject: partner.subject,
+          studyMode: partner.studyMode,
           userEmail,
+          note: "",
           createdAt: new Date(),
         });
 
-        res.send({ success: true, message: "Partner request sent successfully!" });
+        res.send({
+          success: true,
+          message: "Partner request sent successfully!",
+        });
       } catch (err) {
         console.error(err);
-        res.status(500).send({ success: false, message: "Something went wrong!" });
+        res.status(500).send({ success: false, message: "Error occurred!" });
       }
     });
 
-    console.log("Backend connected to MongoDB!");
+    // ---------------------------
+    // GET REQUESTS BY USER
+    // ---------------------------
+    app.get("/requests", async (req, res) => {
+      const email = req.query.email;
+      const result = await requestsCollection
+        .find({ userEmail: email })
+        .toArray();
+
+      res.send(result);
+    });
+
+    // ---------------------------
+    // DELETE REQUEST
+    // ---------------------------
+    app.delete("/requests/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const result = await requestsCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send({ success: true });
+    });
+
+    // ---------------------------
+    // UPDATE REQUEST
+    // ---------------------------
+    app.patch("/requests/:id", async (req, res) => {
+      const id = req.params.id;
+      const { note } = req.body;
+
+      await requestsCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { note } }
+      );
+
+      res.send({ success: true });
+    });
+
+    console.log("MongoDB Connected!");
   } finally {}
 }
-
 run().catch(console.dir);
 
 app.get("/", (req, res) => res.send("StudyMate Backend Running"));
