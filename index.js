@@ -9,7 +9,7 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
-const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.xnz0dsd.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.xnz0dsd.mongodb.net/?retryWrites=true&w=majority`;
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -23,25 +23,19 @@ async function run() {
   try {
     await client.connect();
     const db = client.db("study-mate");
-    const partnersCollection = db.collection("studymates");
-    const requestsCollection = db.collection("partnerRequests");
+    const partners = db.collection("studymates");
+    const requests = db.collection("partnerRequests");
 
-    // ---------------------------
-    // GET ALL PARTNERS
-    // ---------------------------
+    // Get all partners
     app.get("/partners", async (req, res) => {
-      const result = await partnersCollection.find().toArray();
-      res.send(result);
+      const data = await partners.find().toArray();
+      res.send(data);
     });
 
-    // ---------------------------
-    // SINGLE PARTNER
-    // ---------------------------
+    // Single partner
     app.get("/partners/:id", async (req, res) => {
-      const partnerId = req.params.id;
-      const partner = await partnersCollection.findOne({
-        _id: new ObjectId(partnerId),
-      });
+      const id = req.params.id;
+      const partner = await partners.findOne({ _id: new ObjectId(id) });
 
       if (!partner)
         return res.status(404).send({ message: "Partner not found" });
@@ -49,93 +43,66 @@ async function run() {
       res.send(partner);
     });
 
-    // ---------------------------
-    // SEND REQUEST
-    // ---------------------------
+    // Send Request 
     app.post("/send-request/:id", async (req, res) => {
       try {
         const partnerId = req.params.id;
         const { userEmail } = req.body;
 
-        const partner = await partnersCollection.findOne({
-          _id: new ObjectId(partnerId),
-        });
+        if (!userEmail)
+          return res.send({ success: false, message: "Login required" });
 
+        const partner = await partners.findOne({ _id: new ObjectId(partnerId) });
         if (!partner)
-          return res
-            .status(404)
-            .send({ success: false, message: "Partner not found" });
+          return res.status(404).send({ success: false, message: "Partner not found" });
 
-        await partnersCollection.updateOne(
-          { _id: new ObjectId(partnerId) },
-          { $inc: { partnerCount: 1 } }
-        );
-
-        await requestsCollection.insertOne({
+        const requestObj = {
           partnerId: new ObjectId(partnerId),
           partnerName: partner.name,
-          partnerProfileImage: partner.profileImage,
+          partnerProfileImage: partner.image,
           subject: partner.subject,
           studyMode: partner.studyMode,
           userEmail,
           note: "",
           createdAt: new Date(),
-        });
+        };
 
-        res.send({
-          success: true,
-          message: "Partner request sent successfully!",
-        });
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ success: false, message: "Error occurred!" });
+        await requests.insertOne(requestObj);
+
+        res.send({ success: true, message: "Request sent successfully!" });
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Server error!" });
       }
     });
 
-    // ---------------------------
-    // GET REQUESTS BY USER
-    // ---------------------------
+    // Get all requests 
     app.get("/requests", async (req, res) => {
       const email = req.query.email;
-      const result = await requestsCollection
-        .find({ userEmail: email })
-        .toArray();
-
-      res.send(result);
+      const data = await requests.find({ userEmail: email }).toArray();
+      res.send(data);
     });
 
-    // ---------------------------
-    // DELETE REQUEST
-    // ---------------------------
+    // Delete request
     app.delete("/requests/:id", async (req, res) => {
       const id = req.params.id;
-
-      const result = await requestsCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
-
+      await requests.deleteOne({ _id: new ObjectId(id) });
       res.send({ success: true });
     });
 
-    // ---------------------------
-    // UPDATE REQUEST
-    // ---------------------------
+    // Update request
     app.patch("/requests/:id", async (req, res) => {
       const id = req.params.id;
       const { note } = req.body;
-
-      await requestsCollection.updateOne(
+      await requests.updateOne(
         { _id: new ObjectId(id) },
         { $set: { note } }
       );
-
       res.send({ success: true });
     });
 
-    console.log("MongoDB Connected!");
+    console.log("Backend running");
   } finally {}
 }
-run().catch(console.dir);
 
-app.get("/", (req, res) => res.send("StudyMate Backend Running"));
+run().catch(console.dir);
 app.listen(port, () => console.log(`Server running on port ${port}`));
