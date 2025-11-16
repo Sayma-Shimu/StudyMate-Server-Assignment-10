@@ -43,37 +43,49 @@ async function run() {
       res.send(partner);
     });
 
-    // Send Request 
-    app.post("/send-request/:id", async (req, res) => {
-      try {
-        const partnerId = req.params.id;
-        const { userEmail } = req.body;
+    
+   // Send Request 
+// Send Request 
+app.post("/send-request/:id", async (req, res) => {
+  try {
+    const partnerId = req.params.id;
+    const { userEmail } = req.body;
 
-        if (!userEmail)
-          return res.send({ success: false, message: "Login required" });
+    if (!userEmail)
+      return res.send({ success: false, message: "Login required" });
 
-        const partner = await partners.findOne({ _id: new ObjectId(partnerId) });
-        if (!partner)
-          return res.status(404).send({ success: false, message: "Partner not found" });
+    const partner = await partners.findOne({ _id: new ObjectId(partnerId) });
+    if (!partner)
+      return res.status(404).send({ success: false, message: "Partner not found" });
 
-        const requestObj = {
-          partnerId: new ObjectId(partnerId),
-          partnerName: partner.name,
-          partnerProfileImage: partner.image,
-          subject: partner.subject,
-          studyMode: partner.studyMode,
-          userEmail,
-          note: "",
-          createdAt: new Date(),
-        };
+    // Insert request data
+    const requestObj = {
+      partnerId: new ObjectId(partnerId),
+      partnerName: partner.name,
+      partnerProfileImage: partner.profileImage,
+      subject: partner.subject,
+      studyMode: partner.studyMode,
+      userEmail,
+      note: "",
+      createdAt: new Date(),
+    };
 
-        await requests.insertOne(requestObj);
+    await requests.insertOne(requestObj);
 
-        res.send({ success: true, message: "Request sent successfully!" });
-      } catch (error) {
-        res.status(500).send({ success: false, message: "Server error!" });
-      }
-    });
+    // ⭐⭐⭐ Increase partnerCount by 1
+    await partners.updateOne(
+      { _id: new ObjectId(partnerId) },
+      { $inc: { partnerCount: 1 } }
+    );
+
+    res.send({ success: true, message: "Request sent & partnerCount increased!" });
+
+  } catch (error) {
+    res.status(500).send({ success: false, message: "Server error!" });
+  }
+});
+
+
 
     // Get all requests 
     app.get("/requests", async (req, res) => {
