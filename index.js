@@ -26,68 +26,86 @@ async function run() {
     const partners = db.collection("studymates");
     const requests = db.collection("partnerRequests");
 
+    // ⭐ FIRST: Top Rated Route (must come early!)
+    app.get("/partners/top-rated", async (req, res) => {
+      try {
+        const topPartners = await partners
+          .find()
+          .sort({ rating: -1 })
+          .limit(3)
+          .toArray();
+
+        res.send(topPartners);
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Server error!" });
+      }
+    });
+
     // Get all partners
     app.get("/partners", async (req, res) => {
       const data = await partners.find().toArray();
       res.send(data);
     });
 
-    // Single partner
+    // Single partner (must come AFTER top-rated)
     app.get("/partners/:id", async (req, res) => {
       const id = req.params.id;
-      const partner = await partners.findOne({ _id: new ObjectId(id) });
 
-      if (!partner)
-        return res.status(404).send({ message: "Partner not found" });
+      try {
+        const partner = await partners.findOne({ _id: new ObjectId(id) });
 
-      res.send(partner);
+        if (!partner)
+          return res.status(404).send({ message: "Partner not found" });
+
+        res.send(partner);
+      } catch (error) {
+        res.status(400).send({ message: "Invalid ID format" });
+      }
     });
 
-    
-   // Send Request 
-// Send Request 
-app.post("/send-request/:id", async (req, res) => {
-  try {
-    const partnerId = req.params.id;
-    const { userEmail } = req.body;
+    // Send Request + increase partnerCount
+    app.post("/send-request/:id", async (req, res) => {
+      try {
+        const partnerId = req.params.id;
+        const { userEmail } = req.body;
 
-    if (!userEmail)
-      return res.send({ success: false, message: "Login required" });
+        if (!userEmail)
+          return res.send({ success: false, message: "Login required" });
 
-    const partner = await partners.findOne({ _id: new ObjectId(partnerId) });
-    if (!partner)
-      return res.status(404).send({ success: false, message: "Partner not found" });
+        const partner = await partners.findOne({ _id: new ObjectId(partnerId) });
+        if (!partner)
+          return res
+            .status(404)
+            .send({ success: false, message: "Partner not found" });
 
-    // Insert request data
-    const requestObj = {
-      partnerId: new ObjectId(partnerId),
-      partnerName: partner.name,
-      partnerProfileImage: partner.profileImage,
-      subject: partner.subject,
-      studyMode: partner.studyMode,
-      userEmail,
-      note: "",
-      createdAt: new Date(),
-    };
+        const requestObj = {
+          partnerId: new ObjectId(partnerId),
+          partnerName: partner.name,
+          partnerProfileImage: partner.profileImage,
+          subject: partner.subject,
+          studyMode: partner.studyMode,
+          userEmail,
+          note: "",
+          createdAt: new Date(),
+        };
 
-    await requests.insertOne(requestObj);
+        await requests.insertOne(requestObj);
 
-    // ⭐⭐⭐ Increase partnerCount by 1
-    await partners.updateOne(
-      { _id: new ObjectId(partnerId) },
-      { $inc: { partnerCount: 1 } }
-    );
+        await partners.updateOne(
+          { _id: new ObjectId(partnerId) },
+          { $inc: { partnerCount: 1 } }
+        );
 
-    res.send({ success: true, message: "Request sent & partnerCount increased!" });
+        res.send({
+          success: true,
+          message: "Request sent & partnerCount updated!",
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Server error!" });
+      }
+    });
 
-  } catch (error) {
-    res.status(500).send({ success: false, message: "Server error!" });
-  }
-});
-
-
-
-    // Get all requests 
+    // Get requests
     app.get("/requests", async (req, res) => {
       const email = req.query.email;
       const data = await requests.find({ userEmail: email }).toArray();
@@ -102,19 +120,17 @@ app.post("/send-request/:id", async (req, res) => {
     });
 
     // Update request
-   // Update request (FULL editable fields)
-app.patch("/requests/:id", async (req, res) => {
-  const id = req.params.id;
-  const updateData = req.body;
+    app.patch("/requests/:id", async (req, res) => {
+      const id = req.params.id;
+      const updateData = req.body;
 
-  const result = await requests.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: updateData }
-  );
+      const result = await requests.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateData }
+      );
 
-  res.send({ success: true, result });
-});
-
+      res.send({ success: true, result });
+    });
 
     console.log("Backend running");
   } finally {}
