@@ -102,15 +102,19 @@ app.post("/send-request/:id", async (req, res) => {
     });
 
     // Update request
-    app.patch("/requests/:id", async (req, res) => {
-      const id = req.params.id;
-      const { note } = req.body;
-      await requests.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { note } }
-      );
-      res.send({ success: true });
-    });
+   // Update request (FULL editable fields)
+app.patch("/requests/:id", async (req, res) => {
+  const id = req.params.id;
+  const updateData = req.body;
+
+  const result = await requests.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: updateData }
+  );
+
+  res.send({ success: true, result });
+});
+
 
     console.log("Backend running");
   } finally {}
