@@ -195,5 +195,11 @@ async function run() {
   } finally { }
 }
 
+app.get('/', async (req, res)=>{
+res.send({
+  message: 'hello world'
+})
+})
+
 run().catch(console.dir);
 app.listen(port, () => console.log(`Server running on port ${port}`));
