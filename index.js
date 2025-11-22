@@ -21,12 +21,12 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("study-mate");
     const partners = db.collection("studymates");
     const requests = db.collection("partnerRequests");
 
-    // ⭐ FIRST: Top Rated Route (must come early!)
+    //  TOP RATED PARTNERS
     app.get("/partners/top-rated", async (req, res) => {
       try {
         const topPartners = await partners
@@ -41,13 +41,59 @@ async function run() {
       }
     });
 
-    // Get all partners
+    //   Search + Sort
     app.get("/partners", async (req, res) => {
-      const data = await partners.find().toArray();
-      res.send(data);
+      try {
+        const { search, sort } = req.query;
+
+        const experienceOrder = {
+          Beginner: 1,
+          Intermediate: 2,
+          Expert: 3,
+        };
+
+        let query = {};
+
+        // SEARCH BY SUBJECT
+        if (search) {
+          query.subject = { $regex: search, $options: "i" };
+        }
+
+        let data = await partners.find(query).toArray();
+
+        // SORT BY EXPERIENCE
+        if (sort === "asc") {
+          data.sort(
+            (a, b) =>
+              (experienceOrder[a.experienceLevel] || 0) -
+              (experienceOrder[b.experienceLevel] || 0)
+          );
+        } else if (sort === "desc") {
+          data.sort(
+            (a, b) =>
+              (experienceOrder[b.experienceLevel] || 0) -
+              (experienceOrder[a.experienceLevel] || 0)
+          );
+        }
+
+        res.send({ success: true, data });
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Server error!" });
+      }
     });
 
-    // Single partner (must come AFTER top-rated)
+    // profile by email
+    app.get("/profile", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.send({ status: 404, message: "User not found" });
+      }
+
+      const userProfile = await partners.findOne({ email });
+      res.send(userProfile);
+    });
+
+    // single partner
     app.get("/partners/:id", async (req, res) => {
       const id = req.params.id;
 
@@ -63,7 +109,7 @@ async function run() {
       }
     });
 
-    // Send Request + increase partnerCount
+    // send request
     app.post("/send-request/:id", async (req, res) => {
       try {
         const partnerId = req.params.id;
@@ -105,21 +151,21 @@ async function run() {
       }
     });
 
-    // Get requests
+    //  all request
     app.get("/requests", async (req, res) => {
       const email = req.query.email;
       const data = await requests.find({ userEmail: email }).toArray();
       res.send(data);
     });
 
-    // Delete request
+    // delete request
     app.delete("/requests/:id", async (req, res) => {
       const id = req.params.id;
       await requests.deleteOne({ _id: new ObjectId(id) });
       res.send({ success: true });
     });
 
-    // Update request
+    // update request
     app.patch("/requests/:id", async (req, res) => {
       const id = req.params.id;
       const updateData = req.body;
@@ -132,8 +178,21 @@ async function run() {
       res.send({ success: true, result });
     });
 
+    // update profile
+    app.patch("/profile/update/:id", async (req, res) => {
+      const id = req.params.id;
+      const updateData = req.body;
+
+      const result = await partners.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateData }
+      );
+
+      res.send({ success: true, result });
+    });
+
     console.log("Backend running");
-  } finally {}
+  } finally { }
 }
 
 run().catch(console.dir);
