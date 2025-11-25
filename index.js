@@ -26,7 +26,7 @@ async function run() {
     const partners = db.collection("studymates");
     const requests = db.collection("partnerRequests");
 
-    //  TOP RATED PARTNERS
+   
     app.get("/partners/top-rated", async (req, res) => {
       try {
         const topPartners = await partners
